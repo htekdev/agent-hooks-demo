@@ -1,0 +1,36 @@
+name: Enforce Conventional Commits
+description: >
+  Requires all commit messages to follow the Conventional Commits format:
+  type(scope): description. This keeps the git history clean and enables
+  automated changelog generation.
+on:
+  commit:
+    lifecycle: pre
+blocking: true
+steps:
+  - name: Validate commit message format
+    run: |
+      $msg = "${{ event.commit.message }}"
+      $firstLine = ($msg -split "`n")[0]
+
+      $pattern = '^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\(.+\))?!?:\s.+'
+
+      if ($firstLine -notmatch $pattern) {
+        Write-Host "❌ BLOCKED: Commit message does not follow Conventional Commits format."
+        Write-Host ""
+        Write-Host "  Your message:  $firstLine"
+        Write-Host ""
+        Write-Host "  Expected format: type(scope): description"
+        Write-Host ""
+        Write-Host "  Valid types:"
+        Write-Host "    feat, fix, docs, style, refactor, perf,"
+        Write-Host "    test, build, ci, chore, revert"
+        Write-Host ""
+        Write-Host "  Examples:"
+        Write-Host "    feat(auth): add login endpoint"
+        Write-Host "    fix: resolve null pointer in parser"
+        Write-Host "    docs(readme): update installation steps"
+        exit 1
+      }
+
+      Write-Host "✅ Commit message follows Conventional Commits format."

@@ -1,0 +1,8 @@
+{
+  "appName": "agent-hooks-demo",
+  "version": "1.0.0",
+  "features": {
+    "darkMode": true,
+    "notifications": false
+  }
+}

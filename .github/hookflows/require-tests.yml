@@ -1,0 +1,35 @@
+name: Require Tests for Source Changes
+description: >
+  When committing changes to source files in src/, at least one test file
+  must also be included in the commit. This enforces the practice of
+  writing tests alongside code changes.
+on:
+  commit:
+    lifecycle: pre
+    paths:
+      - 'src/**'
+    paths-ignore:
+      - 'src/**/*.test.*'
+      - 'src/**/*.spec.*'
+blocking: true
+steps:
+  - name: Check for accompanying tests
+    run: |
+      $files = "${{ join(event.commit.files, '|') }}"
+      $fileList = $files -split '\|'
+
+      $hasSourceChanges = $fileList | Where-Object { $_ -match '^src/' -and $_ -notmatch '\.(test|spec)\.' }
+      $hasTestChanges = $fileList | Where-Object { $_ -match '\.(test|spec)\.' -or $_ -match '^tests/' }
+
+      if ($hasSourceChanges -and -not $hasTestChanges) {
+        Write-Host "❌ BLOCKED: Source changes require accompanying tests."
+        Write-Host ""
+        Write-Host "  Source files changed:"
+        $hasSourceChanges | ForEach-Object { Write-Host "    • $_" }
+        Write-Host ""
+        Write-Host "  No test files found in this commit."
+        Write-Host "  Add or update tests in tests/ or as *.test.* / *.spec.* files."
+        exit 1
+      }
+
+      Write-Host "✅ Source changes include accompanying tests."

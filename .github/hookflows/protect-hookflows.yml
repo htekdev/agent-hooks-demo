@@ -1,0 +1,27 @@
+name: Protect Hookflow Governance
+description: >
+  Prevents agents from modifying or creating hookflow workflow files.
+  This is the "who watches the watchmen" hook — it ensures governance rules
+  can only be changed by humans, not by the AI agents the rules govern.
+on:
+  file:
+    lifecycle: pre
+    paths:
+      - '.github/hookflows/**'
+    types: [edit, create, delete]
+blocking: true
+steps:
+  - name: Block governance file changes
+    run: |
+      echo "🛡️ BLOCKED: Hookflow governance files are protected."
+      echo ""
+      echo "  File: ${{ event.file.path }}"
+      echo "  Action: ${{ event.file.action }}"
+      echo ""
+      echo "  Agent hooks define the rules that govern AI agent behavior."
+      echo "  These files can only be modified by humans directly — not by"
+      echo "  the agents they are designed to govern."
+      echo ""
+      echo "  To modify governance rules, edit the files manually outside"
+      echo "  of an agent session."
+      exit 1

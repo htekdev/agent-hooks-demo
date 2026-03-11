@@ -1,0 +1,32 @@
+name: Validate JSON After Edit
+description: >
+  Runs after any JSON file is created or edited, validating that the result
+  is syntactically correct. This is a post-lifecycle hook — it lets the edit
+  happen first, then checks the result. If the JSON is invalid, the agent
+  is told to fix it.
+on:
+  file:
+    lifecycle: post
+    paths:
+      - '**/*.json'
+    paths-ignore:
+      - 'node_modules/**'
+      - 'package-lock.json'
+    types: [edit, create]
+blocking: true
+steps:
+  - name: Validate JSON syntax
+    run: |
+      $filePath = "${{ event.file.path }}"
+      $content = Get-Content $filePath -Raw
+
+      try {
+        $content | ConvertFrom-Json | Out-Null
+        Write-Host "✅ Valid JSON: $filePath"
+      } catch {
+        Write-Host "❌ INVALID JSON: $filePath"
+        Write-Host ""
+        Write-Host "  The file contains a syntax error. Please fix it."
+        Write-Host "  Error: $($_.Exception.Message)"
+        exit 1
+      }
