@@ -2,7 +2,8 @@
 #
 # Hook type: preToolUse
 # The "who watches the watchmen" hook — blocks edit/create/delete of files
-# inside .github/hooks/ so agents can't weaken their own governance.
+# inside .github/hooks/, .copilot/hooks/, .github/agents/*.agent.md,
+# and scripts/hooks/ so agents can't weaken their own governance.
 # Input: JSON with toolName, toolArgs
 # Output: JSON with permissionDecision if blocked
 
@@ -24,10 +25,24 @@ if (-not $filePath) {
     exit 0
 }
 
-# Block changes to hook configuration files
-if ($filePath -match '(^|[/\\])\.github[/\\]hooks[/\\]') {
+# Block changes to protected hook configuration and script files
+if ($filePath -match '(^|[/\\])\.github[/\\]hooks[/\\]|(^|[/\\])\.copilot[/\\]hooks[/\\]|(^|[/\\])\.github[/\\]agents[/\\][^/\\]+\.agent\.md$|(^|[/\\])scripts[/\\]hooks[/\\]') {
+    if ($filePath -match '(^|[/\\])\.github[/\\]hooks[/\\]') {
+        $protectedArea = "Hook configuration files"
+        $protectedPath = ".github/hooks/"
+    } elseif ($filePath -match '(^|[/\\])\.copilot[/\\]hooks[/\\]') {
+        $protectedArea = "Hook configuration files"
+        $protectedPath = ".copilot/hooks/"
+    } elseif ($filePath -match '(^|[/\\])\.github[/\\]agents[/\\][^/\\]+\.agent\.md$') {
+        $protectedArea = "Agent definition files"
+        $protectedPath = ".github/agents/*.agent.md"
+    } else {
+        $protectedArea = "Hook scripts"
+        $protectedPath = "scripts/hooks/"
+    }
+
     @{
         permissionDecision = "deny"
-        permissionDecisionReason = "🛡️ Blocked: Hook governance files (.github/hooks/) can only be modified by humans, not by the agents they govern."
+        permissionDecisionReason = "🛡️ Blocked: $protectedArea ($protectedPath) can only be modified by humans, not by the agents they govern."
     } | ConvertTo-Json -Compress
 }

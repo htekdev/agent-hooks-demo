@@ -1,0 +1,50 @@
+{
+  "version": 1,
+  "_commentHeader": [
+    "Personal hooks belong in ~/.copilot/hooks/ NOT .github/hooks/.",
+    "Supported on Copilot CLI v0.0.422+ and VS Code 1.112 Insiders+.",
+    "Personal hooks run in addition to, not instead of, repository-level hooks."
+  ],
+  "hooks": {
+    "sessionStart": [
+      {
+        "type": "command",
+        "bash": "~/.copilot/scripts/personal-session-log.sh",
+        "powershell": "bash ~/.copilot/scripts/personal-session-log.sh",
+        "timeoutSec": 10,
+        "comment": "Log every Copilot session start to ~/.copilot/logs/sessions.log so you have a personal audit trail across all repositories."
+      }
+    ],
+    "sessionEnd": [
+      {
+        "type": "command",
+        "bash": "~/.copilot/scripts/personal-session-log.sh",
+        "powershell": "bash ~/.copilot/scripts/personal-session-log.sh",
+        "timeoutSec": 10,
+        "comment": "Log every Copilot session end to the same personal log file for start/end visibility across repos."
+      }
+    ],
+    "preToolUse": [
+      {
+        "type": "command",
+        "bash": "~/.copilot/scripts/personal-safety-check.sh",
+        "powershell": "bash ~/.copilot/scripts/personal-safety-check.sh",
+        "timeoutSec": 10,
+        "env": {
+          "SAFETY_MODE": "block-dangerous"
+        },
+        "comment": "Deny destructive system-level commands such as rm -rf /, format C:, del /f, rd /s /q, mkfs, and similar wipe or reformat patterns."
+      },
+      {
+        "type": "command",
+        "bash": "~/.copilot/scripts/personal-safety-check.sh",
+        "powershell": "bash ~/.copilot/scripts/personal-safety-check.sh",
+        "timeoutSec": 10,
+        "env": {
+          "SAFETY_MODE": "confirm-force-push"
+        },
+        "comment": "Use permissionDecision=ask so any git push --force or git push -f requires a human confirmation before history is rewritten."
+      }
+    ]
+  }
+}

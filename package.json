@@ -1,0 +1,20 @@
+{
+  "name": "agent-hooks-demo.add-support-doc-for-other-platforms",
+  "version": "1.0.0",
+  "description": "Practical examples of **Copilot agent hooks** — shell scripts that run at key points during AI agent sessions to enforce governance, security, and quality standards.",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs",
+    "test": "tests"
+  },
+  "scripts": {
+    "test": "jest"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "jest": "^30.3.0"
+  }
+}

@@ -1,0 +1,63 @@
+{
+  "version": 1,
+  "comment": "JetBrains IDE public preview subset of this repository's hook configuration. Includes only hook events supported by JetBrains as of 2026-03-11.",
+  "hooks": {
+    "userPromptSubmitted": [
+      {
+        "type": "command",
+        "bash": "./scripts/hooks/log-prompt.sh",
+        "powershell": "./scripts/hooks/log-prompt.ps1",
+        "timeoutSec": 10,
+        "comment": "Log each submitted user prompt for audit and usage tracking"
+      }
+    ],
+    "preToolUse": [
+      {
+        "type": "command",
+        "bash": "./scripts/hooks/block-secrets.sh",
+        "powershell": "./scripts/hooks/block-secrets.ps1",
+        "timeoutSec": 10,
+        "comment": "Block create/edit of sensitive files (.env, .pem, .key, secrets/)"
+      },
+      {
+        "type": "command",
+        "bash": "./scripts/hooks/protect-hooks.sh",
+        "powershell": "./scripts/hooks/protect-hooks.ps1",
+        "timeoutSec": 10,
+        "comment": "Prevent agents from modifying hook governance files"
+      },
+      {
+        "type": "command",
+        "bash": "./scripts/hooks/conventional-commits.sh",
+        "powershell": "./scripts/hooks/conventional-commits.ps1",
+        "timeoutSec": 10,
+        "comment": "Enforce conventional commit message format on git commit commands"
+      },
+      {
+        "type": "command",
+        "bash": "./scripts/hooks/require-tests.sh",
+        "powershell": "./scripts/hooks/require-tests.ps1",
+        "timeoutSec": 15,
+        "comment": "Require test files when committing source changes"
+      }
+    ],
+    "postToolUse": [
+      {
+        "type": "command",
+        "bash": "./scripts/hooks/validate-json.sh",
+        "powershell": "./scripts/hooks/validate-json.ps1",
+        "timeoutSec": 10,
+        "comment": "Validate JSON syntax after any .json file is edited"
+      }
+    ],
+    "errorOccurred": [
+      {
+        "type": "command",
+        "bash": "./scripts/hooks/log-error.sh",
+        "powershell": "./scripts/hooks/log-error.ps1",
+        "timeoutSec": 10,
+        "comment": "Log hook and tool errors for troubleshooting and audit trail"
+      }
+    ]
+  }
+}
