@@ -1,22 +1,25 @@
 # Agent Hooks Demo
 
-Practical examples of **Copilot agent hooks** — governance rules that control what AI agents can and can't do inside your repository.
+Practical examples of **Copilot agent hooks** — shell scripts that run at key points during AI agent sessions to enforce governance, security, and quality standards.
 
-> Agent hooks (powered by [hookflow](https://github.com/htekdev/gh-hookflow)) let you define YAML workflows that automatically run before or after an agent takes an action — editing a file, running a command, making a commit, or pushing code. Think of them as guardrails for AI.
+> Agent hooks let you execute custom shell commands before or after an agent takes an action — editing a file, running a command, or any tool call. They receive JSON context via stdin and can **approve or deny** operations. Think of them as guardrails for AI.
 
 ---
 
 ## What's in This Repo
 
-This repository contains **5 hookflow workflows** that demonstrate the most common agent governance patterns:
+This repository contains a complete hooks configuration with **6 example hooks** covering the most common agent governance patterns:
 
-| Hook | File | Trigger | When | What It Does |
-|------|------|---------|------|--------------|
-| 🔒 Block Secrets | [`block-secrets.yml`](.github/hookflows/block-secrets.yml) | `file` | **pre** | Prevents agents from touching `.env`, `.pem`, `.key`, or `secrets/` files |
-| 🛡️ Protect Hookflows | [`protect-hookflows.yml`](.github/hookflows/protect-hookflows.yml) | `file` | **pre** | Stops agents from modifying the governance rules themselves |
-| ✅ Validate JSON | [`validate-json.yml`](.github/hookflows/validate-json.yml) | `file` | **post** | Checks JSON syntax after any `.json` file is edited |
-| 📝 Conventional Commits | [`conventional-commits.yml`](.github/hookflows/conventional-commits.yml) | `commit` | **pre** | Enforces `type(scope): description` commit message format |
-| 🧪 Require Tests | [`require-tests.yml`](.github/hookflows/require-tests.yml) | `commit` | **pre** | Blocks commits to `src/` unless test files are included |
+| Hook | Script | Type | What It Does |
+|------|--------|------|--------------|
+| 📋 Session Log | [`session-log`](scripts/hooks/session-log.sh) | `sessionStart` / `sessionEnd` | Logs session start and end events for audit trail |
+| 🔒 Block Secrets | [`block-secrets`](scripts/hooks/block-secrets.sh) | `preToolUse` | Denies edit/create of `.env`, `.pem`, `.key`, and `secrets/` files |
+| 🛡️ Protect Hooks | [`protect-hooks`](scripts/hooks/protect-hooks.sh) | `preToolUse` | Stops agents from modifying hook governance files |
+| 📝 Conventional Commits | [`conventional-commits`](scripts/hooks/conventional-commits.sh) | `preToolUse` | Enforces `type(scope): description` commit message format |
+| 🧪 Require Tests | [`require-tests`](scripts/hooks/require-tests.sh) | `preToolUse` | Blocks commits to `src/` unless test files are included |
+| ✅ Validate JSON | [`validate-json`](scripts/hooks/validate-json.sh) | `postToolUse` | Validates JSON syntax after any `.json` file is edited |
+
+Every hook includes both **Bash** and **PowerShell** scripts for cross-platform support.
 
 ---
 
@@ -24,192 +27,254 @@ This repository contains **5 hookflow workflows** that demonstrate the most comm
 
 ### The Basics
 
-Agent hooks intercept actions that an AI agent tries to perform. Each hook is a YAML file in `.github/hookflows/` with three parts:
+Hooks are configured in JSON files at `.github/hooks/*.json`. Each file declares which hook types to use and what scripts to run:
 
-```yaml
-name: My Hook                    # Human-readable name
-on:                               # When to trigger
-  file:                           #   ↳ trigger type (file, commit, push, tool)
-    paths: ['**/*.env']           #   ↳ which files to match
-    types: [create, edit]         #   ↳ which actions to match
-    lifecycle: pre                #   ↳ run BEFORE (pre) or AFTER (post) the action
-steps:                            # What to do
-  - name: Check something
-    run: |
-      echo "This runs when the hook triggers"
-      exit 1                      # exit 1 = block the action
+```json
+{
+  "version": 1,
+  "hooks": {
+    "preToolUse": [
+      {
+        "type": "command",
+        "bash": "./scripts/hooks/block-secrets.sh",
+        "powershell": "./scripts/hooks/block-secrets.ps1",
+        "timeoutSec": 10
+      }
+    ]
+  }
+}
 ```
 
-### Pre vs Post Lifecycle
+### Hook Types
 
-- **`pre`** hooks run **before** the action happens. They can **block** it by exiting with code 1. Use these for prevention.
-- **`post`** hooks run **after** the action completes. They can validate the result and flag issues. Use these for validation.
+| Hook Type | When It Fires | Can Block? | Example Use |
+|-----------|--------------|------------|-------------|
+| `sessionStart` | New agent session begins | No | Initialize logging, validate environment |
+| `sessionEnd` | Agent session completes | No | Cleanup, generate reports |
+| `userPromptSubmitted` | User submits a prompt | No | Audit logging, usage tracking |
+| **`preToolUse`** | **Before any tool executes** | **Yes** | Block dangerous commands, enforce policies |
+| `postToolUse` | After a tool completes | No | Validate results, log statistics |
+| `errorOccurred` | An error occurs | No | Send alerts, track error patterns |
 
-### Trigger Types
+### How Blocking Works (`preToolUse`)
 
-| Trigger | Fires When | Example Use |
-|---------|-----------|-------------|
-| `file` | A file is created, edited, or deleted | Block edits to sensitive files |
-| `commit` | A git commit is made | Enforce commit message format |
-| `push` | Code is pushed to remote | Require approvals for main branch |
-| `tool` | A specific tool is called | Block dangerous shell commands |
+`preToolUse` is the most powerful hook — it can **deny tool executions** by returning JSON to stdout:
+
+```json
+{
+  "permissionDecision": "deny",
+  "permissionDecisionReason": "This operation is not allowed because..."
+}
+```
+
+If the script outputs nothing or returns `"allow"`, the tool call proceeds normally.
+
+### Input Format
+
+Every hook receives JSON context via stdin:
+
+```json
+{
+  "timestamp": 1704614600000,
+  "cwd": "/path/to/project",
+  "toolName": "edit",
+  "toolArgs": "{\"path\":\"src/auth.js\",\"old_str\":\"...\",\"new_str\":\"...\"}"
+}
+```
+
+For `postToolUse`, the input also includes a `toolResult` field:
+
+```json
+{
+  "toolResult": {
+    "resultType": "success",
+    "textResultForLlm": "File updated successfully"
+  }
+}
+```
 
 ---
 
 ## Walkthrough of Each Hook
 
-### 🔒 Block Secrets (`block-secrets.yml`)
+### 📋 Session Log (`session-log.sh` / `session-log.ps1`)
 
-**Goal:** Prevent agents from creating or editing files that commonly contain secrets.
+**Goal:** Create an audit trail of agent sessions.
 
-```yaml
-on:
-  file:
-    lifecycle: pre
-    paths:
-      - '**/.env'
-      - '**/.env.*'
-      - '**/secrets/**'
-      - '**/*.pem'
-      - '**/*.key'
-    types: [create, edit]
-blocking: true
+**How it works:** Runs on both `sessionStart` and `sessionEnd`. Reads the JSON input to determine whether it's a start or end event (by checking for `source` vs `reason` fields) and appends a timestamped entry to `logs/agent-sessions.log`.
+
+**Key concept:** Not all hooks need to block — some just observe and log.
+
+```bash
+# Example log output:
+# [2025-01-07T12:00:00Z] SESSION START | source=new | cwd=/home/user/project
+# [2025-01-07T12:05:30Z] SESSION END   | reason=complete | cwd=/home/user/project
 ```
-
-**How it works:** When an agent tries to create or edit any file matching these glob patterns, the hook fires *before* the edit happens and blocks it with a clear error message. The agent can't bypass it — the action simply doesn't execute.
-
-**Why it matters:** AI agents should never hardcode secrets. This hook enforces that secrets are managed through proper channels (CI/CD variables, vaults, etc.).
 
 ---
 
-### 🛡️ Protect Hookflows (`protect-hookflows.yml`)
+### 🔒 Block Secrets (`block-secrets.sh` / `block-secrets.ps1`)
+
+**Goal:** Prevent agents from creating or editing files that commonly contain secrets.
+
+**How it works:** Intercepts `preToolUse` events where `toolName` is `edit` or `create`. Extracts the file path from `toolArgs` and checks it against sensitive patterns (`.env`, `.pem`, `.key`, `secrets/`). Returns a deny decision if matched.
+
+```bash
+# The core logic:
+case "$FILE_PATH" in
+  *.env|*/.env|*/.env.*)  BLOCKED=true ;;
+  *.pem)                   BLOCKED=true ;;
+  *.key)                   BLOCKED=true ;;
+  */secrets/*|secrets/*)   BLOCKED=true ;;
+esac
+```
+
+**Why it matters:** AI agents should never hardcode secrets. This enforces that secrets are managed through CI/CD variables or a vault.
+
+---
+
+### 🛡️ Protect Hooks (`protect-hooks.sh` / `protect-hooks.ps1`)
 
 **Goal:** Prevent agents from modifying the governance rules themselves.
 
-```yaml
-on:
-  file:
-    lifecycle: pre
-    paths:
-      - '.github/hookflows/**'
-    types: [edit, create, delete]
-blocking: true
-```
+**How it works:** Checks if any `edit` or `create` operation targets a file inside `.github/hooks/`. If so, denies the operation. This is the "who watches the watchmen" hook.
 
-**How it works:** This is the "who watches the watchmen" hook. If an agent tries to edit, create, or delete any file inside `.github/hookflows/`, it gets blocked. This ensures that only humans can change the rules that govern AI behavior.
+```bash
+if echo "$FILE_PATH" | grep -qE '(^|/)\.github/hooks/'; then
+  # Deny — agents can't edit their own rules
+fi
+```
 
 **Why it matters:** Without this, an agent could weaken or disable its own governance rules to complete a task. Self-protecting governance is a fundamental safety pattern.
 
 ---
 
-### ✅ Validate JSON (`validate-json.yml`)
+### 📝 Conventional Commits (`conventional-commits.sh` / `conventional-commits.ps1`)
+
+**Goal:** Enforce consistent commit message formatting.
+
+**How it works:** Intercepts `bash`/`powershell` tool calls that contain `git commit`. Extracts the commit message from the `-m` flag and validates it against the Conventional Commits pattern: `type(scope): description`.
+
+```bash
+PATTERN='^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\(.+\))?!?: .+'
+
+if ! echo "$FIRST_LINE" | grep -qE "$PATTERN"; then
+  # Deny with helpful examples
+fi
+```
+
+**Why it matters:** Consistent commit messages enable automated changelogs, semantic versioning, and a readable git history.
+
+---
+
+### 🧪 Require Tests (`require-tests.sh` / `require-tests.ps1`)
+
+**Goal:** Ensure source code changes are always accompanied by tests.
+
+**How it works:** Intercepts `git commit` commands (via `preToolUse` on `bash`/`powershell`) and inspects `git diff --cached --name-only`. If any staged files are in `src/` but no test files (`.test.*`, `.spec.*`, or `tests/`) are present, the commit is blocked.
+
+```bash
+HAS_SOURCE=$(echo "$STAGED_FILES" | grep -E '^src/' | grep -vE '\.(test|spec)\.')
+HAS_TESTS=$(echo "$STAGED_FILES" | grep -E '\.(test|spec)\.|^tests/')
+
+if [ -n "$HAS_SOURCE" ] && [ -z "$HAS_TESTS" ]; then
+  # Deny — source changes need tests
+fi
+```
+
+**Why it matters:** Tests are not optional. This enforces that every code change is tested before it enters the repository.
+
+---
+
+### ✅ Validate JSON (`validate-json.sh` / `validate-json.ps1`)
 
 **Goal:** Automatically validate JSON syntax after any edit.
 
-```yaml
-on:
-  file:
-    lifecycle: post
-    paths: ['**/*.json']
-    paths-ignore:
-      - 'node_modules/**'
-      - 'package-lock.json'
-    types: [edit, create]
-blocking: true
-```
+**How it works:** This is a `postToolUse` hook — it runs **after** an `edit` or `create` completes. If the file has a `.json` extension, the script reads it from disk and attempts to parse it. Advisory output is logged to stderr.
 
-**How it works:** This is a **post** hook — it lets the edit happen first, then reads the file from disk and attempts to parse it. If the JSON is invalid, the agent is told to fix it. Note the `paths-ignore` to skip files the agent shouldn't need to validate.
+```bash
+if ! jq empty "$FILE_PATH" 2>/dev/null; then
+  echo "❌ Invalid JSON detected in: $FILE_PATH" >&2
+fi
+```
 
 **Why it matters:** Invalid JSON breaks applications silently. Catching syntax errors immediately after an edit saves debugging time.
 
 ---
 
-### 📝 Conventional Commits (`conventional-commits.yml`)
-
-**Goal:** Enforce consistent commit message formatting.
-
-```yaml
-on:
-  commit:
-    lifecycle: pre
-blocking: true
-```
-
-**How it works:** Before every commit, the hook checks that the first line matches the Conventional Commits pattern: `type(scope): description`. Valid types include `feat`, `fix`, `docs`, `refactor`, `test`, etc. If the message doesn't match, the commit is blocked with helpful examples.
-
-**Why it matters:** Consistent commit messages enable automated changelogs, semantic versioning, and make git history actually readable.
-
----
-
-### 🧪 Require Tests (`require-tests.yml`)
-
-**Goal:** Ensure source code changes are always accompanied by tests.
-
-```yaml
-on:
-  commit:
-    lifecycle: pre
-    paths:
-      - 'src/**'
-    paths-ignore:
-      - 'src/**/*.test.*'
-      - 'src/**/*.spec.*'
-blocking: true
-```
-
-**How it works:** When a commit includes files from `src/`, the hook checks whether any test files (`.test.*`, `.spec.*`, or files in `tests/`) are also included. If source code changes arrive without corresponding tests, the commit is blocked.
-
-**Why it matters:** Tests are not optional. This hook enforces that every code change is tested before it enters the repository.
-
----
-
 ## Getting Started
-
-### Prerequisites
-
-Install the [hookflow CLI](https://github.com/htekdev/gh-hookflow):
-
-```bash
-gh extension install htekdev/gh-hookflow
-```
 
 ### Using These Hooks in Your Repo
 
-**Option 1: Copy the examples**
-
-Copy the `.github/hookflows/` directory into your repository and customize the workflows to fit your needs.
-
-**Option 2: Start from scratch**
+1. **Copy the hooks configuration** into your repo:
 
 ```bash
-# Initialize hookflow in your repo with example scaffolding
-gh hookflow init --repo
+# Copy the hooks config
+mkdir -p .github/hooks
+cp .github/hooks/hooks.json YOUR_REPO/.github/hooks/
 
-# Or generate a hook from a plain-English description
-gh hookflow create "block edits to any file in the config/ directory"
+# Copy the hook scripts
+cp -r scripts/hooks YOUR_REPO/scripts/hooks
+
+# Make scripts executable (Unix)
+chmod +x YOUR_REPO/scripts/hooks/*.sh
 ```
 
-### Register the Hooks
+2. **Commit to your default branch** — hooks must be present on the default branch for Copilot coding agent. For Copilot CLI, hooks are loaded from the current working directory.
 
-To activate hooks in your Copilot CLI sessions:
+3. **That's it** — hooks run automatically during Copilot agent sessions. No registration or installation needed.
+
+### Writing Your Own Hook
+
+Create a script that reads JSON from stdin and optionally outputs a permission decision:
 
 ```bash
-gh hookflow register
+#!/bin/bash
+INPUT=$(cat)
+TOOL_NAME=$(echo "$INPUT" | jq -r '.toolName')
+TOOL_ARGS=$(echo "$INPUT" | jq -r '.toolArgs')
+
+# Your logic here...
+
+# To block:
+echo '{"permissionDecision":"deny","permissionDecisionReason":"Reason here"}'
+
+# To allow: output nothing, or:
+echo '{"permissionDecision":"allow"}'
 ```
 
-This installs the Git hooks and Copilot skill that make hookflows run automatically during agent sessions.
+Then wire it into `.github/hooks/hooks.json`:
 
-### Validate Your Workflows
-
-```bash
-gh hookflow validate
+```json
+{
+  "version": 1,
+  "hooks": {
+    "preToolUse": [
+      {
+        "type": "command",
+        "bash": "./scripts/hooks/my-hook.sh",
+        "powershell": "./scripts/hooks/my-hook.ps1",
+        "timeoutSec": 10
+      }
+    ]
+  }
+}
 ```
 
-### Test a Workflow
+### Testing Hooks Locally
+
+Pipe test JSON into your script to validate behavior:
 
 ```bash
-# Simulate a file event to see if your hook would trigger
-gh hookflow test --workflow block-secrets --event file --path ".env"
+# Test a preToolUse hook
+echo '{
+  "timestamp": 1704614600000,
+  "cwd": "/tmp",
+  "toolName": "create",
+  "toolArgs": "{\"path\":\".env\",\"file_text\":\"SECRET=abc123\"}"
+}' | ./scripts/hooks/block-secrets.sh
+
+# Check the output — should see a deny decision
 ```
 
 ---
@@ -219,18 +284,22 @@ gh hookflow test --workflow block-secrets --event file --path ".env"
 ```
 agent-hooks-demo/
 ├── .github/
-│   └── hookflows/
-│       ├── block-secrets.yml          # 🔒 Block sensitive file access
-│       ├── protect-hookflows.yml      # 🛡️ Self-protecting governance
-│       ├── validate-json.yml          # ✅ Post-edit JSON validation
-│       ├── conventional-commits.yml   # 📝 Commit message format
-│       └── require-tests.yml          # 🧪 Tests required with source changes
+│   └── hooks/
+│       └── hooks.json                     # 🔧 Main hooks configuration
+├── scripts/
+│   └── hooks/
+│       ├── session-log.sh / .ps1          # 📋 Audit trail logging
+│       ├── block-secrets.sh / .ps1        # 🔒 Block sensitive file access
+│       ├── protect-hooks.sh / .ps1        # 🛡️ Self-protecting governance
+│       ├── conventional-commits.sh / .ps1 # 📝 Commit message format
+│       ├── require-tests.sh / .ps1        # 🧪 Tests required with source changes
+│       └── validate-json.sh / .ps1        # ✅ Post-edit JSON validation
 ├── src/
-│   └── index.js                       # Sample source code
+│   └── index.js                           # Sample source code
 ├── tests/
-│   └── index.test.js                  # Sample test file
+│   └── index.test.js                      # Sample test file
 ├── config/
-│   └── settings.json                  # Sample JSON config
+│   └── settings.json                      # Sample JSON config
 ├── .gitignore
 └── README.md
 ```
@@ -239,9 +308,10 @@ agent-hooks-demo/
 
 ## Learn More
 
-- **[gh-hookflow](https://github.com/htekdev/gh-hookflow)** — The hookflow CLI and runtime engine
-- **[Hookflow Schema Reference](https://github.com/htekdev/gh-hookflow#schema)** — Full YAML schema documentation
-- **[GitHub Copilot CLI](https://docs.github.com/en/copilot/using-github-copilot/using-github-copilot-in-the-command-line)** — Copilot in your terminal
+- **[About Hooks](https://docs.github.com/en/copilot/concepts/agents/coding-agent/about-hooks)** — Conceptual overview of agent hooks
+- **[Hooks Configuration Reference](https://docs.github.com/en/copilot/reference/hooks-configuration)** — Full reference with all hook types and input/output formats
+- **[Using Hooks](https://docs.github.com/en/copilot/how-tos/use-copilot-agents/coding-agent/use-hooks)** — How-to guide for creating hooks
+- **[GitHub Copilot CLI](https://docs.github.com/en/copilot/concepts/agents/copilot-cli/about-copilot-cli)** — Copilot in your terminal
 
 ---
 

@@ -1,0 +1,62 @@
+{
+  "version": 1,
+  "hooks": {
+    "sessionStart": [
+      {
+        "type": "command",
+        "bash": "./scripts/hooks/session-log.sh",
+        "powershell": "./scripts/hooks/session-log.ps1",
+        "timeoutSec": 10,
+        "comment": "Log session start for audit trail"
+      }
+    ],
+    "preToolUse": [
+      {
+        "type": "command",
+        "bash": "./scripts/hooks/block-secrets.sh",
+        "powershell": "./scripts/hooks/block-secrets.ps1",
+        "timeoutSec": 10,
+        "comment": "Block create/edit of sensitive files (.env, .pem, .key, secrets/)"
+      },
+      {
+        "type": "command",
+        "bash": "./scripts/hooks/protect-hooks.sh",
+        "powershell": "./scripts/hooks/protect-hooks.ps1",
+        "timeoutSec": 10,
+        "comment": "Prevent agents from modifying hook governance files"
+      },
+      {
+        "type": "command",
+        "bash": "./scripts/hooks/conventional-commits.sh",
+        "powershell": "./scripts/hooks/conventional-commits.ps1",
+        "timeoutSec": 10,
+        "comment": "Enforce conventional commit message format on git commit commands"
+      },
+      {
+        "type": "command",
+        "bash": "./scripts/hooks/require-tests.sh",
+        "powershell": "./scripts/hooks/require-tests.ps1",
+        "timeoutSec": 15,
+        "comment": "Require test files when committing source changes"
+      }
+    ],
+    "postToolUse": [
+      {
+        "type": "command",
+        "bash": "./scripts/hooks/validate-json.sh",
+        "powershell": "./scripts/hooks/validate-json.ps1",
+        "timeoutSec": 10,
+        "comment": "Validate JSON syntax after any .json file is edited"
+      }
+    ],
+    "sessionEnd": [
+      {
+        "type": "command",
+        "bash": "./scripts/hooks/session-log.sh",
+        "powershell": "./scripts/hooks/session-log.ps1",
+        "timeoutSec": 10,
+        "comment": "Log session end for audit trail"
+      }
+    ]
+  }
+}
