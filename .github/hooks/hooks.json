@@ -38,6 +38,13 @@
         "powershell": "./scripts/hooks/require-tests.ps1",
         "timeoutSec": 15,
         "comment": "Require test files when committing source changes"
+      },
+      {
+        "type": "command",
+        "bash": "./scripts/hooks/block-skill.sh",
+        "powershell": "./scripts/hooks/block-skill.ps1",
+        "timeoutSec": 10,
+        "comment": "Block agents from invoking restricted skills (e.g., cloud-deploy)"
       }
     ],
     "postToolUse": [

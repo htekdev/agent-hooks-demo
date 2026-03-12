@@ -8,7 +8,7 @@ Practical examples of **Copilot agent hooks** — shell scripts that run at key 
 
 ## What's in This Repo
 
-This repository contains a complete hooks configuration with **6 example hooks** covering the most common agent governance patterns:
+This repository contains a complete hooks configuration with **7 example hooks** covering the most common agent governance patterns:
 
 | Hook | Script | Type | What It Does |
 |------|--------|------|--------------|
@@ -17,6 +17,7 @@ This repository contains a complete hooks configuration with **6 example hooks**
 | 🛡️ Protect Hooks | [`protect-hooks`](scripts/hooks/protect-hooks.sh) | `preToolUse` | Stops agents from modifying hook governance files |
 | 📝 Conventional Commits | [`conventional-commits`](scripts/hooks/conventional-commits.sh) | `preToolUse` | Enforces `type(scope): description` commit message format |
 | 🧪 Require Tests | [`require-tests`](scripts/hooks/require-tests.sh) | `preToolUse` | Blocks commits to `src/` unless test files are included |
+| 🚫 Block Skill | [`block-skill`](scripts/hooks/block-skill.sh) | `preToolUse` | Blocks agents from invoking restricted skills (e.g., `cloud-deploy`) |
 | ✅ Validate JSON | [`validate-json`](scripts/hooks/validate-json.sh) | `postToolUse` | Validates JSON syntax after any `.json` file is edited |
 
 Every hook includes both **Bash** and **PowerShell** scripts for cross-platform support.
@@ -186,6 +187,38 @@ fi
 
 ---
 
+### 🚫 Block Skill (`block-skill.sh` / `block-skill.ps1`)
+
+**Goal:** Prevent agents from invoking restricted skills that require human oversight.
+
+**How it works:** Intercepts `preToolUse` events where `toolName` is `skill`. Extracts the skill name from `toolArgs` and checks it against a configurable blocked list defined at the top of the script. The default blocked skill is `cloud-deploy` — a skill that deploys applications to cloud environments.
+
+```bash
+# Configurable list — add skill names to block
+BLOCKED_SKILLS=(
+  "cloud-deploy"
+)
+
+# Check if the invoked skill is blocked
+SKILL_NAME=$(echo "$INPUT" | jq -r '.toolArgs' | jq -r '.skill // empty')
+
+for BLOCKED in "${BLOCKED_SKILLS[@]}"; do
+  if [ "$SKILL_NAME" = "$BLOCKED" ]; then
+    # Deny with governance reason
+  fi
+done
+```
+
+**Why it matters:** Some skills perform high-impact operations (deployments, infrastructure provisioning, data exports) that should require human approval. This hook enforces that policy at the agent level, ensuring restricted skills can never be invoked — even if they're installed and available.
+
+**Example prompt that would trigger this hook:**
+
+> "Deploy my application to the staging cloud environment so the QA team can start testing the new features."
+
+If `cloud-deploy` were an available skill, the agent would attempt to invoke it, and this hook would block it with a message directing the user to the proper CI/CD workflow.
+
+---
+
 ### ✅ Validate JSON (`validate-json.sh` / `validate-json.ps1`)
 
 **Goal:** Automatically validate JSON syntax after any edit.
@@ -293,10 +326,13 @@ agent-hooks-demo/
 │       ├── protect-hooks.sh / .ps1        # 🛡️ Self-protecting governance
 │       ├── conventional-commits.sh / .ps1 # 📝 Commit message format
 │       ├── require-tests.sh / .ps1        # 🧪 Tests required with source changes
+│       ├── block-skill.sh / .ps1          # 🚫 Block restricted skills
 │       └── validate-json.sh / .ps1        # ✅ Post-edit JSON validation
 ├── src/
 │   └── index.js                           # Sample source code
 ├── tests/
+│   ├── hooks/
+│   │   └── block-skill.test.sh / .ps1     # 🧪 Block skill hook tests
 │   └── index.test.js                      # Sample test file
 ├── config/
 │   └── settings.json                      # Sample JSON config
